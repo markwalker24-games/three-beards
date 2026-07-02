@@ -771,11 +771,18 @@ function ensureBackdrop(L){const bd=L&&L.backdrop;
   else{bdImg=null;bdSrc=null;}}
 let now=()=>perfNow();           // patched below
 
+function colFloorTop(S,cx){ if(!S)return null; const rows=[];                 // per-column floor (same rule TOPMAP uses)
+  for(const k in S){const i=k.indexOf(','); if(+k.slice(0,i)===cx)rows.push(+k.slice(i+1));}
+  if(!rows.length)return null; rows.sort((a,b)=>a-b); let fl=rows[0];
+  for(let k=1;k<rows.length;k++){if(rows[k]>rows[k-1]+1){fl=rows[k];break;}} return fl*TILE; }
 function normalize(L){
   if(!L.theme)L.theme='ship';
   if(!L.world||!L.world.w)L.world={w:2000};                      // survive hand-edited / partial imports
   if(!L.mechanisms)L.mechanisms=[];
   if(!L.spawns)L.spawns={B:{x:3*TILE,y:16*TILE},R:{x:4*TILE,y:16*TILE},O:{x:5*TILE,y:16*TILE}};
+  for(const m of L.mechanisms){ const def=T[m.type];              // PIN each surface object to its current floor — painting terrain later must never move placed pieces
+    if(def&&def.surface&&m.y===undefined){ const d=def.dims(m), ft=colFloorTop(L.solid,Math.floor((m.x+d.w/2)/TILE));
+      if(ft!=null)m.y=ft; } }
   let n=0; const seen={};
   for(const m of L.mechanisms){ if(!m.id||seen[m.id])m.id=m.type+'_'+(++n); seen[m.id]=1; }
   if(!L.terrain)L.terrain=[]; if(!L.solid)L.solid={};
