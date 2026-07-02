@@ -396,12 +396,12 @@ const THE_RIGGING=(function(){ const s={};
       {id:'bar1',type:'barrel',x:4*TILE},
       {id:'p1',type:'plate',x:9*TILE,w:64,targetId:'trap1'},
       {id:'trap1',type:'trapdoor',x:10*TILE,y:12*TILE,w:64},           // blocks the B→C hop from below until held open
-      {id:'dh1',type:'deckhand',x:13*TILE,min:12*TILE,max:15*TILE},    // patrols yardarm C (edge-stop keeps him up there)
+      {id:'dh1',type:'deckhand',x:13*TILE,y:11*TILE,min:12*TILE,max:15*TILE},    // patrols yardarm C (explicit floor — the column has 3 stacked platforms)
       {id:'gull1',type:'gullrider',x:26*TILE,y:15*TILE},
       {id:'gull2',type:'gullrider',x:6*TILE,y:7*TILE},
       {id:'pow1',type:'powderbarrel',x:30*TILE,min:26*TILE,max:36*TILE},
       {id:'r1',type:'rope',x:16*TILE+8,topY:3*TILE,botY:20*TILE},      // from the nest all the way to the deck
-      {id:'tr1',type:'treasure',x:21*TILE},
+      {id:'tr1',type:'treasure',x:21*TILE,y:3*TILE},
     ],
     intent:'Vertical: barrel on plate opens the trapdoor → zig-zag yardarms A-D (96px hops, everyone) → nest is +160 (Redbeard only) → he lowers the deck rope so the crew can climb 17 tiles straight up. Gulls harass the climb; a deckhand walks yardarm C.'};
 })();
@@ -466,6 +466,14 @@ function bounds(m){ // world AABB for hit-test & draw anchor (top-left)
   return {x:m.x, y:surf-d.h, w:d.w, h:d.h};
 }
 function num(label,key,step,min,max){return {label,key,type:'number',step:step||1,min,max};}
+function floorTopNear(x,refY){ const L=SIM.pirates?SIM.L:LV, S=(L&&L.solid)||{}, cx=Math.floor(x/TILE), rows=[];
+  for(const k in S){const i=k.indexOf(','); if(+k.slice(0,i)===cx)rows.push(+k.slice(i+1));}
+  rows.sort((a,b)=>a-b); const tops=[];
+  for(let i=0;i<rows.length;i++)if(i===0||rows[i]>rows[i-1]+1)tops.push(rows[i]*TILE);   // top of each solid run (each stacked platform)
+  for(const t of ((L&&L.terrain)||[]))if(x>=t.x&&x<=t.x+t.w)tops.push(t.y);
+  if(!tops.length)return null; tops.sort((a,b)=>a-b);
+  for(const tp of tops)if(tp>=refY-12)return tp;                                          // first floor at/below the cursor
+  return tops[tops.length-1]; }
 
 T.ground={surface:false,dims:m=>({w:m.w,h:m.h}),fields:[num('width','w',10,10),num('height','h',10,10)],
   solidRect:m=>({x:m.x,y:m.y,w:m.w,h:m.h}),
@@ -1843,6 +1851,8 @@ addEventListener('mousemove',ev=>{ if(!EDIT)return; edMouse=screenToWorld(ev);
   if(drag.mode==='move'){ if(isSpawn(o)){o.ref.x=snap(drag.bx+(p.x-drag.gx));o.ref.y=snap(drag.by+(p.y-drag.gy));}
     else if(o.type==='rope'){const dx=snap(drag.bx+(p.x-drag.gx))-o.x;o.x+=dx;}
     else if(o.w!==undefined&&(o.type==='ground'||o.type==='deck')){o.x=snap(drag.bx+(p.x-drag.gx));o.y=snap(drag.by+(p.y-drag.gy));}
+    else if(T[o.type]&&T[o.type].surface){o.x=snap(drag.bx+(p.x-drag.gx));                     // surface piece: stick to the platform nearest the cursor
+      const d=dims(o),ft=floorTopNear(o.x+d.w/2,p.y); if(ft!=null)o.y=ft;}
     else{o.x=snap(drag.bx+(p.x-drag.gx)); if(o.y!==undefined)o.y=snap(drag.by+(p.y-drag.gy));} buildInspector(); }
   else if(drag.mode==='resize'){ const b=bounds(o);
     if(o.type==='ground'||o.type==='deck'){o.w=Math.max(20,snap(p.x-o.x));o.h=Math.max(20,snap(p.y-o.y));}
@@ -1875,7 +1885,7 @@ function placeNew(type,p){ pushUndo(); const id=type+'_'+Date.now().toString(36)
     if(type==='rope'){m.topY=snap(p.y);m.botY=snap(p.y)+150;}
     else if(type==='steps'){m.y=snap(p.y);m.w=140;m.h=120;m.n=7;m.dir=1;}
     else if(type==='trapdoor'){m.y=snap(p.y);m.w=100;}
-    else m.y=surfaceTopUnder(snap(p.x));                       // surface mech rests on floor under it; drag to move between floors
+    else{const ft=floorTopNear(snap(p.x)+16,p.y);m.y=(ft!=null)?ft:surfaceTopUnder(snap(p.x));}   // land on the platform under the CLICK, not a guess
     if(type==='barricade')m.h=100; if(type==='gate')m.h=118; if(type==='plate')m.w=64; if(type==='hazard'){m.w=120;m.by=[];}
     if(type==='sign')m.text='Ahoy! Edit this hint in the inspector.';
     if(type==='gunner'){m.dir=-1;m.rate=.85;} if(type==='brute'){m.min=snap(p.x)-100;m.max=snap(p.x)+100;}
