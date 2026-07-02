@@ -1,0 +1,107 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Three Beards — Autotile Template (4-bit / 16 tiles)</title>
+<style>
+  body{background:#12151c;color:#e8e2d4;font:14px/1.5 system-ui,sans-serif;margin:0;padding:24px;}
+  h1{font-size:20px;margin:0 0 4px} .sub{opacity:.7;margin:0 0 18px}
+  code{background:#232833;padding:1px 6px;border-radius:5px}
+  .row{display:flex;gap:32px;flex-wrap:wrap;align-items:flex-start}
+  .card{background:#1a1e27;border:1px solid #2a3040;border-radius:12px;padding:16px}
+  canvas{image-rendering:pixelated;background:#0c0e13;border-radius:6px;display:block}
+  button{background:#2a3550;color:#e8e2d4;border:1px solid #3a4a6a;border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer;margin:8px 8px 0 0}
+  button:hover{background:#33405f}
+  label{opacity:.8;margin-right:8px}
+  select{background:#232833;color:#e8e2d4;border:1px solid #3a4a6a;border-radius:6px;padding:4px 8px}
+  table{border-collapse:collapse;margin-top:8px;font-size:13px}
+  td,th{border:1px solid #2a3040;padding:4px 9px;text-align:left} th{background:#20252f}
+  .k{color:#e3b23c;font-weight:600}
+</style></head><body>
+<h1>Autotile template — 4-bit edge set (16 tiles)</h1>
+<p class="sub">The engine reads <code>tileset.png</code> as a <b>4×4 grid</b>. For each solid cell it computes
+<code>mask = (N?1:0) | (E?2:0) | (S?4:0) | (W?8:0)</code> (a bit is set when that neighbour is <b>solid</b>) and blits
+<b>cell index = mask</b> → <code>col = mask &amp; 3</code>, <code>row = mask &gt;&gt; 2</code>. Paint each of the 16 slots below in its labeled role and it lands automatically.</p>
+
+<div class="row">
+  <div class="card">
+    <b>Labeled layout (what to draw where)</b>
+    <canvas id="guide"></canvas>
+    <div><label>cell size</label><select id="cs"><option>32</option><option selected>64</option><option>128</option></select>
+      <button id="dlGuide">Download labeled guide PNG</button>
+      <button id="dlSheet">Download gray-box tileset.png</button></div>
+    <p class="sub" style="max-width:520px;margin-top:12px">Save the gray-box sheet as <code>tileset.png</code> next to <code>three-beards.html</code> to test the pipeline immediately, then replace each cell with real art at the same grid positions. Any square cell size works (32/64/128…); the engine scales cells to the 32px tile.</p>
+  </div>
+  <div class="card">
+    <b>Role table</b>
+    <table id="tbl"><tr><th>#</th><th>solid neighbours</th><th>role</th></tr></table>
+  </div>
+</div>
+
+<script>
+const ROLES=[
+ [0,'—','Single / isolated block (all 4 sides are edges)'],
+ [1,'N','Column bottom-cap (solid above; hangs down)'],
+ [2,'E','Row left-cap (left end of a horizontal 1-tall bar)'],
+ [3,'N·E','Outer corner ⌞ bottom-left (mass goes up & right)'],
+ [4,'S','Column top-cap (top of a 1-wide pillar)'],
+ [5,'N·S','Vertical shaft (left & right edges)'],
+ [6,'E·S','Outer corner ⌜ top-left (mass goes down & right)'],
+ [7,'N·E·S','Left edge (only the left face is exposed)'],
+ [8,'W','Row right-cap (right end of a horizontal 1-tall bar)'],
+ [9,'N·W','Outer corner ⌟ bottom-right (mass goes up & left)'],
+ [10,'E·W','Horizontal beam / thin platform (top & bottom edges)'],
+ [11,'N·E·W','Bottom edge / ceiling underside (only bottom exposed)'],
+ [12,'S·W','Outer corner ⌝ top-right (mass goes down & left)'],
+ [13,'N·S·W','Right edge (only the right face is exposed)'],
+ [14,'E·S·W','TOP edge — the walkable surface / deck top'],
+ [15,'N·E·S·W','Interior fill (fully surrounded)']
+];
+// gray-box tile, matching the game's drawSolidTiles look. n/e/s/w = neighbour SOLID?
+function tile(ctx,x,y,s,n,e,so,w){
+  ctx.fillStyle='#6a4a2b';ctx.fillRect(x,y,s,s);
+  ctx.fillStyle='rgba(0,0,0,.10)';ctx.fillRect(x,y+Math.round(s/2),s,Math.max(1,s/32));
+  const t=Math.max(2,s*0.15);
+  if(!n){ctx.fillStyle='#8a6a42';ctx.fillRect(x,y,s,t);ctx.fillStyle='#a5814f';ctx.fillRect(x,y,s,t*0.4);}
+  if(!so){ctx.fillStyle='rgba(0,0,0,.30)';ctx.fillRect(x,y+s-t*0.7,s,t*0.7);}
+  if(!w){ctx.fillStyle='rgba(0,0,0,.20)';ctx.fillRect(x,y,t*0.5,s);}
+  if(!e){ctx.fillStyle='rgba(0,0,0,.20)';ctx.fillRect(x+s-t*0.5,y,t*0.5,s);}
+  if(!n&&!w){ctx.fillStyle='#a5814f';ctx.fillRect(x,y,t*0.6,t*0.6);}
+  if(!n&&!e){ctx.fillStyle='#a5814f';ctx.fillRect(x+s-t*0.6,y,t*0.6,t*0.6);}
+}
+function sheetCanvas(cell){ // pure gray-box tileset.png (4×4, cell px)
+  const c=document.createElement('canvas');c.width=c.height=cell*4;const g=c.getContext('2d');
+  for(let mask=0;mask<16;mask++){const col=mask&3,row=mask>>2;
+    tile(g,col*cell,row*cell,cell,mask&1,mask&2,mask&4,mask&8);}
+  return c;
+}
+function drawGuide(cell){
+  const pad=Math.round(cell*0.5), c=document.getElementById('guide');
+  c.width=cell*4+pad*5; c.height=cell*4+pad*5+Math.round(cell*0.9)*4;
+  const g=c.getContext('2d'); g.imageSmoothingEnabled=false;
+  g.fillStyle='#0c0e13';g.fillRect(0,0,c.width,c.height);
+  const rowH=cell+pad+Math.round(cell*0.9);
+  for(let mask=0;mask<16;mask++){const col=mask&3,row=mask>>2;
+    const x=pad+col*(cell+pad), y=pad+row*rowH;
+    tile(g,x,y,cell,mask&1,mask&2,mask&4,mask&8);
+    g.strokeStyle='#3a4a6a';g.lineWidth=1;g.strokeRect(x+.5,y+.5,cell,cell);
+    // neighbour mini-diagram (3×3) top-left
+    const m=Math.max(3,cell*0.11);
+    const nb=[[1,0,mask&1],[0,1,mask&8],[2,1,mask&2],[1,2,mask&4]];
+    g.fillStyle='rgba(0,0,0,.45)';g.fillRect(x+3,y+3,m*3+2,m*3+2);
+    g.fillStyle='#e3b23c';g.fillRect(x+3+m+1,y+3+m+1,m,m); // center
+    g.fillStyle='#8fbcff';nb.forEach(([cx,cy,on])=>{if(on)g.fillRect(x+3+cx*m+ (cx?1:0),y+3+cy*m+(cy?1:0),m,m);});
+    // labels below the tile
+    g.fillStyle='#e3b23c';g.font='bold '+Math.round(cell*0.26)+'px system-ui';g.textBaseline='top';
+    g.fillText('#'+mask+'  '+(ROLES[mask][1]==='—'?'(none)':ROLES[mask][1]), x, y+cell+4);
+    g.fillStyle='#c8c2b4';g.font=Math.round(cell*0.19)+'px system-ui';
+    const role=ROLES[mask][2].split(' (')[0];
+    g.fillText(role.length>26?role.slice(0,25)+'…':role, x, y+cell+4+Math.round(cell*0.3));
+  }
+}
+function dl(canvas,name){canvas.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();});}
+function build(){const cell=+document.getElementById('cs').value;drawGuide(cell);}
+document.getElementById('cs').onchange=build;
+document.getElementById('dlGuide').onclick=()=>{const cell=+document.getElementById('cs').value;drawGuide(cell);dl(document.getElementById('guide'),'autotile-guide.png');};
+document.getElementById('dlSheet').onclick=()=>{const cell=+document.getElementById('cs').value;dl(sheetCanvas(cell),'tileset.png');};
+// role table
+const tb=document.getElementById('tbl');
+ROLES.forEach(r=>{const tr=document.createElement('tr');tr.innerHTML='<td class="k">'+r[0]+'</td><td>'+(r[1])+'</td><td>'+r[2]+'</td>';tb.appendChild(tr);});
+build();
+</script></body></html>
