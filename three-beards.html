@@ -1793,7 +1793,7 @@ function undo(){if(!undoStack.length){sfx('ping');return;}LV=JSON.parse(undoStac
 
 cv.addEventListener('mousedown',ev=>{ if(!EDIT)return; const p=screenToWorld(ev); edMouse=p;
   if(brush){ placeNew(brush,p); return; }
-  if(tool==='paint'||tool==='carve'){ pushUndo(); drag={mode:'paintdrag',solid:tool==='paint'}; paintCell(p,tool==='paint'); return; }
+  if(tool==='paint'||tool==='carve'){ pushUndo(); drag={mode:'paintdrag',solid:tool==='paint',lx:Math.floor(p.x/TILE),ly:Math.floor(p.y/TILE)}; paintCell(p,tool==='paint'); return; }
   if(tool==='erase'){const o=hitTest(p.x,p.y);if(o&&!isSpawn(o)){selected=o;deleteSel();}return;}
   if(tool==='link'){const o=hitTest(p.x,p.y);if(o&&!isSpawn(o)&&T[o.type]&&T[o.type].targets){linkFrom=o;}return;}
   // select tool — grab the SELECTED object's resize handle first (easy to hit even just outside it)
@@ -1806,7 +1806,10 @@ cv.addEventListener('mousedown',ev=>{ if(!EDIT)return; const p=screenToWorld(ev)
 });
 addEventListener('mousemove',ev=>{ if(!EDIT)return; edMouse=screenToWorld(ev);
   if(!drag)return; const p=edMouse;
-  if(drag.mode==='paintdrag'){paintCell(p,drag.solid);return;}
+  if(drag.mode==='paintdrag'){ const cx=Math.floor(p.x/TILE),cy=Math.floor(p.y/TILE);   // walk the line from the last sample — fast sweeps don't skip cells
+    const dx=cx-drag.lx,dy=cy-drag.ly,n=Math.max(Math.abs(dx),Math.abs(dy),1);
+    for(let i=1;i<=n;i++)paintCell({x:(drag.lx+dx*i/n)*TILE+TILE/2,y:(drag.ly+dy*i/n)*TILE+TILE/2},drag.solid);
+    drag.lx=cx;drag.ly=cy;return;}
   if(drag.mode==='pan'){const r=cv.getBoundingClientRect();const dx=(ev.clientX-drag.gx)/r.width*VW/edZoom,dy=(ev.clientY-drag.gy)/r.height*VH/edZoom;
     edCam.x=clamp(drag.cx-dx,-800,Math.max(-800,LV.world.w+300));edCam.y=clamp(drag.cy-dy,-400,1700);return;}
   const o=drag.obj;
@@ -1837,7 +1840,7 @@ function zoomAt(fx,fy,mult){const b=edZoom;edZoom=clamp(edZoom*mult,0.3,1.6);
 function setZoom(z){const b=edZoom;edZoom=clamp(z,0.3,1.6);
   edCam.x+=0.5*VW*(1/b-1/edZoom);edCam.y+=0.5*VH*(1/b-1/edZoom);if(typeof updateZoomLabel==='function')updateZoomLabel();persist();}
 
-function paintCell(p,solid){ const cx=Math.floor(p.x/TILE),cy=Math.floor(p.y/TILE); if(cx<0||cy<0)return;
+function paintCell(p,solid){ const cx=Math.floor(p.x/TILE),cy=Math.floor(p.y/TILE);
   if(!LV.solid)LV.solid={}; const k=cx+','+cy;
   if(solid){ if(LV.solid[k])return; LV.solid[k]=1; LV.world.w=Math.max(LV.world.w||0,(cx+1)*TILE); }
   else { if(!LV.solid[k])return; delete LV.solid[k]; }
