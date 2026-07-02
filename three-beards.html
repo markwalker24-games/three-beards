@@ -196,7 +196,7 @@
     </div>
     <div id="palette" class="panel"></div>
     <div id="inspector" class="panel"><div class="empty">Nothing selected.<br><br>Pick a piece from the palette and click the canvas to place it. Click a placed piece to edit it.</div></div>
-    <div id="edHelp">Click-place from palette · drag to move · <b>Link</b> tool wires a plate/capstan/cannon to its target · scroll or drag empty space to pan</div>
+    <div id="edHelp">Click-place from palette · drag to move · <b>Link</b> tool wires a plate/capstan/cannon to its target · <b>hold Space</b> (or middle-drag / scroll) to pan</div>
   </div>
 
   <input type="file" id="fileIn" accept="application/json" style="display:none">
@@ -1765,6 +1765,12 @@ function setActive(id){if(!SIM.pirates||SIM.won||id===SIM.active)return;if(SIM.p
 
 // ===================================================================== editor
 let edCam={x:-300,y:0}, edZoom=1, tool='select', brush=null, selected=null, gridOn=true, linkFrom=null, edMouse={x:0,y:0};
+let spaceHand=false;   // hold Space = grabber hand — drag pans with ANY tool active
+addEventListener('keydown',e=>{ if(!EDIT||e.key!==' ')return;
+  if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
+  e.preventDefault(); if(!spaceHand){spaceHand=true;cv.style.cursor='grab';} });
+addEventListener('keyup',e=>{ if(e.key===' '){spaceHand=false;if(EDIT)cv.style.cursor='';} });
+addEventListener('blur',()=>{spaceHand=false;cv.style.cursor='';});
 let drag=null; // {mode:'move'|'resize'|'pan', obj, ox,oy}
 const paletteEl=document.getElementById('palette'), inspEl=document.getElementById('inspector');
 
@@ -1798,9 +1804,10 @@ let undoStack=[];
 function pushUndo(){const s=JSON.stringify(stripRuntime(LV));if(undoStack[undoStack.length-1]===s)return;undoStack.push(s);if(undoStack.length>80)undoStack.shift();}
 function undo(){if(!undoStack.length){sfx('ping');return;}LV=JSON.parse(undoStack.pop());normalize(LV);rebuildTop();selected=null;linkFrom=null;bdSrc=null;buildInspector();persist();sfx('swap');}
 
-cv.addEventListener('pointerdown',ev=>{ if(!EDIT)return; if(ev.button!==undefined&&ev.button!==0)return;
+cv.addEventListener('pointerdown',ev=>{ if(!EDIT)return; if(ev.button!==undefined&&ev.button!==0&&ev.button!==1)return;
   ev.preventDefault(); try{cv.setPointerCapture(ev.pointerId);}catch(_){}
   const p=screenToWorld(ev); edMouse=p;
+  if(spaceHand||ev.button===1){ drag={mode:'pan',gx:ev.clientX,gy:ev.clientY,cx:edCam.x,cy:edCam.y}; cv.style.cursor='grabbing'; return; }
   if(brush){ placeNew(brush,p); return; }
   if(tool==='paint'||tool==='carve'){ pushUndo(); drag={mode:'paintdrag',solid:tool==='paint',lx:Math.floor(p.x/TILE),ly:Math.floor(p.y/TILE)}; paintCell(p,tool==='paint'); return; }
   if(tool==='erase'){const o=hitTest(p.x,p.y);if(o&&!isSpawn(o)){selected=o;deleteSel();}return;}
@@ -1839,7 +1846,7 @@ addEventListener('pointermove',ev=>{ if(!EDIT)return; edMouse=screenToWorld(ev);
 function edPointerUp(ev){ if(!EDIT)return;
   if(tool==='link'&&linkFrom){const p=screenToWorld(ev);const o=hitTest(p.x,p.y);
     if(o&&!isSpawn(o)&&o!==linkFrom){pushUndo();linkFrom.targetId=o.id;selected=linkFrom;buildInspector();} linkFrom=null;}
-  if(drag){persist(); if(drag.obj)buildInspector();} drag=null; }
+  if(drag){persist(); if(drag.obj)buildInspector();} drag=null; if(EDIT)cv.style.cursor=spaceHand?'grab':''; }
 addEventListener('pointerup',edPointerUp);addEventListener('pointercancel',edPointerUp);
 cv.addEventListener('wheel',ev=>{if(!EDIT)return;ev.preventDefault();
   if(ev.ctrlKey||ev.metaKey){ // pinch / ctrl-wheel = zoom toward cursor
