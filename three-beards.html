@@ -1969,12 +1969,19 @@ function sfx(k){if(!AC)return;switch(k){case'jump':beep(420,.16,'square',.05,180
   case'ping':beep(1400,.06,'triangle',.05,-400);break;case'win':[523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,.28,'triangle',.06),i*120));break;}}
 
 // ===================================================================== overlays
+function goFullscreen(){ try{
+  if(document.fullscreenElement)return;
+  if(!window.matchMedia||!matchMedia('(pointer: coarse)').matches)return;      // phones/tablets only — leave desktop alone
+  const el=document.documentElement;
+  const pr=el.requestFullscreen?el.requestFullscreen({navigationUI:'hide'}):(el.webkitRequestFullscreen&&el.webkitRequestFullscreen());
+  if(pr&&pr.then)pr.then(()=>{try{screen.orientation.lock('landscape').catch(()=>{});}catch(e){}}).catch(()=>{});
+}catch(e){} }
 const startEl=document.getElementById('start'),winEl=document.getElementById('win');
 const startHidden=()=>startEl.classList.contains('hide');
 function hide(el){el.classList.add('hide');}function show(el){el.classList.remove('hide');}
-document.getElementById('playBtn').onclick=()=>{audioInit();hide(startEl);loadSim();};
-document.getElementById('editBtn').onclick=()=>{audioInit();enterEdit();};
-document.getElementById('againBtn').onclick=()=>{loadSim();hide(winEl);};
+document.getElementById('playBtn').onclick=()=>{audioInit();goFullscreen();hide(startEl);loadSim();};
+document.getElementById('editBtn').onclick=()=>{audioInit();goFullscreen();enterEdit();};
+document.getElementById('againBtn').onclick=()=>{goFullscreen();loadSim();hide(winEl);};
 document.getElementById('winEditBtn').onclick=()=>{enterEdit();};
 function onWin(){sfx('win');SIM.shake=6;const ap=SIM.pirates[SIM.active];
   fxRing(ap.x+ap.w/2,ap.y+ap.h/2,'#ffd766',130);fxGlints(ap.x+ap.w/2,ap.y,16);
