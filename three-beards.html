@@ -1043,7 +1043,7 @@ function updateSim(dt){
       if(ap.facing<0&&Math.abs(ap.x-(b.x+b.w))<8){pushBox={x:b.x,y:b.y,w:b.w,h:b.h};pushMech(m,-ap.c.run*dt);}}}
 
   // ACTION button — Bigbeard's tap (grab barrel / drop / roll); Blackbeard & Redbeard handled by the aim state machine above
-  if(actPress&&ap.stun<=0&&!ap.downed&&ap.id==='O'&&!ap.reviving) doAction(ap);
+  if(actPress&&ap.stun<=0&&!ap.downed&&ap.id==='O'&&!ap.reviving&&ap.rolling<=0) doAction(ap);
   if(ap.act>0)ap.act-=dt;
 
   // all pirates physics
@@ -1312,7 +1312,9 @@ function alertTick(dt){for(const id of ORDER){const a=alertState[id];a.t-=dt;if(
 // ===================================================================== location themes
 // Each theme paints terrain tiles procedurally + owns the sky and two parallax layers.
 // A level picks one via `theme:'ship'|...` (editor dropdown). tileset.png still overrides tiles when present.
-function skyGrad(c0,c1,c2){const g=ctx.createLinearGradient(0,0,0,VH);g.addColorStop(0,c0);g.addColorStop(.55,c1);g.addColorStop(1,c2);ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH);}
+const GCACHE={};
+function cg(key,make){return GCACHE[key]||(GCACHE[key]=make());}   // gradients are immutable — build once, reuse every frame (mobile GC relief)
+function skyGrad(c0,c1,c2){const g=cg('sky'+c0+c1+c2,()=>{const q=ctx.createLinearGradient(0,0,0,VH);q.addColorStop(0,c0);q.addColorStop(.55,c1);q.addColorStop(1,c2);return q;});ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH);}
 function skyStars(n,al){ctx.save();for(let i=0;i<n;i++){const x=(i*211+37)%VW,y=((i*127+61)%250)+8,tw=.4+.6*Math.abs(Math.sin(now()/700+i*1.7));
   ctx.globalAlpha=(al||.8)*tw;ctx.fillStyle='#e9edf6';const sz=i%9===0?2:1.4;ctx.fillRect(x,y,sz,sz);}ctx.restore();}
 function skyClouds(n,c,al,yBase,spd){const t=now()/1000;ctx.save();ctx.fillStyle=c;
@@ -1321,6 +1323,7 @@ function skyClouds(n,c,al,yBase,spd){const t=now()/1000;ctx.save();ctx.fillStyle
     ctx.beginPath();ctx.ellipse(x,y,58+(i*37)%40,12+(i*13)%8,0,0,7);
     ctx.ellipse(x+34,y-8,30,10,0,0,7);ctx.ellipse(x-30,y-5,26,9,0,0,7);ctx.fill();}ctx.restore();}
 function worldW(src){return ((src.L?src.L.world:src.world)||{w:3200}).w;}
+function visSpan(f){const cam=EDIT?edCam:(SIM.cam||{x:0,y:0}),z=EDIT?edZoom:1;const a=cam.x*f-240;return [a,a+VW/z+480];}   // the slice of a parallax layer actually on screen
 function villageStone(base,topA,topB,grass){return function(x,y,N,E,So,Wt,h){
   ctx.fillStyle=base[h&3];ctx.fillRect(x,y,TILE,TILE);
   ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(x,y+15,TILE,2);
@@ -1347,12 +1350,14 @@ ship:{label:'⛵ Ship (day)',
       ctx.beginPath();ctx.moveTo(x,300+bob);ctx.lineTo(x+70,300+bob);ctx.lineTo(x+56,308+bob);ctx.lineTo(x+14,308+bob);ctx.fill();
       ctx.fillRect(x+33,250+bob,3,50);ctx.beginPath();ctx.moveTo(x+36,252+bob);ctx.lineTo(x+58,286+bob);ctx.lineTo(x+36,286+bob);ctx.fill();}},
   mid(src){const W2=Math.max(4200,worldW(src)+1600),t=now()/1000;
-    const g=ctx.createLinearGradient(0,360,0,2200);g.addColorStop(0,'#3a7c9e');g.addColorStop(.08,'#4f9ab8');g.addColorStop(.45,'#265d78');g.addColorStop(1,'#122f40');
+    const g=cg('shipsea',()=>{const q=ctx.createLinearGradient(0,360,0,2200);q.addColorStop(0,'#3a7c9e');q.addColorStop(.08,'#4f9ab8');q.addColorStop(.45,'#265d78');q.addColorStop(1,'#122f40');return q;});
     ctx.fillStyle=g;ctx.fillRect(-800,360,W2,3400);
+    const vs=visSpan(.55),wx0=Math.max(-800,Math.floor(vs[0]/26)*26),wx1=Math.min(W2-800,vs[1]);
     ctx.save();for(let r=0;r<3;r++){ctx.globalAlpha=.3-r*.07;ctx.strokeStyle='#dff0f6';ctx.lineWidth=2;
-      ctx.beginPath();for(let x=-800;x<W2-800;x+=26){const y=372+r*26+Math.sin(x/60+t*(1.1+r*.35))*3;x===-800?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();}
+      ctx.beginPath();for(let x=wx0;x<wx1;x+=26){const y=372+r*26+Math.sin(x/60+t*(1.1+r*.35))*3;x===wx0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();}
     ctx.globalAlpha=.5;ctx.fillStyle='#ffffff';
     for(let i=0;i<Math.ceil(W2/160);i++){const x=-800+i*160+((i*53)%40),y=370+((i*37)%70),ph=Math.sin(t*2+i*2.1);
+      if(x<vs[0]||x>vs[1])continue;
       if(ph>.4){ctx.fillRect(x,y,4,1.6);ctx.fillRect(x+1.2,y-1.2,1.6,4);}}ctx.restore();},
   tile(x,y,N,E,So,Wt,h){
     ctx.fillStyle=['#6b4527','#70492b','#674325','#734b2d'][h&3];ctx.fillRect(x,y,TILE,TILE);
@@ -1388,7 +1393,7 @@ village:{label:'🏘 Village (day)',
       for(let k=0;k<3;k++){const sy=274-hh-k*12-((t*10+i*7)%12);ctx.beginPath();ctx.arc(x+44+Math.sin(t+k+i)*3,sy,2.4+k,0,7);ctx.fill();}ctx.restore();
       if(i%4===0){ctx.fillStyle='#b8a888';ctx.fillRect(x+150,240,16,90);ctx.fillStyle='#8a4a34';ctx.beginPath();ctx.moveTo(x+146,244);ctx.lineTo(x+158,222);ctx.lineTo(x+170,244);ctx.fill();}}},
   mid(src){const W2=Math.max(4200,worldW(src)+1600);
-    const g=ctx.createLinearGradient(0,376,0,2000);g.addColorStop(0,'#4e7a3e');g.addColorStop(.06,'#3d6232');g.addColorStop(.4,'#2c4a26');g.addColorStop(1,'#16281a');
+    const g=cg('vilmeadow',()=>{const q=ctx.createLinearGradient(0,376,0,2000);q.addColorStop(0,'#4e7a3e');q.addColorStop(.06,'#3d6232');q.addColorStop(.4,'#2c4a26');q.addColorStop(1,'#16281a');return q;});
     ctx.fillStyle=g;ctx.fillRect(-800,376,W2,3400);
     ctx.fillStyle='#6b543a';for(let x=-800;x<W2-800;x+=64){ctx.fillRect(x,376,5,44);ctx.fillRect(x,382,64,4);ctx.fillRect(x,396,64,4);}
     ctx.fillStyle='#3a5c2e';for(let i=0;i<Math.ceil(W2/300);i++){const x=-760+i*300;
@@ -1397,7 +1402,7 @@ village:{label:'🏘 Village (day)',
 },
 villagenight:{label:'🌙 Village (night)',
   sky(){skyGrad('#2b2340','#6d4158','#c87b4e');skyStars(18,.5);
-    ctx.save();const g=ctx.createLinearGradient(0,VH*.55,0,VH);g.addColorStop(0,'rgba(255,170,90,0)');g.addColorStop(1,'rgba(255,170,90,.28)');
+    ctx.save();const g=cg('duskglow',()=>{const q=ctx.createLinearGradient(0,VH*.55,0,VH);q.addColorStop(0,'rgba(255,170,90,0)');q.addColorStop(1,'rgba(255,170,90,.28)');return q;});
     ctx.fillStyle=g;ctx.fillRect(0,VH*.55,VW,VH*.45);ctx.restore();
     skyClouds(4,'#4b3352',.55,70,6);},
   far(src){const n=Math.ceil((worldW(src)+1800)/420);
@@ -1411,7 +1416,7 @@ villagenight:{label:'🌙 Village (night)',
       ctx.fillRect(x+9,306-hh,7,8);if(i%2)ctx.fillRect(x+32,306-hh,7,8);ctx.globalAlpha=1;
       if(i%4===0){ctx.fillStyle='#1c1830';ctx.fillRect(x+150,240,16,90);ctx.beginPath();ctx.moveTo(x+146,244);ctx.lineTo(x+158,222);ctx.lineTo(x+170,244);ctx.fill();}}},
   mid(src){const W2=Math.max(4200,worldW(src)+1600);
-    const g=ctx.createLinearGradient(0,376,0,2000);g.addColorStop(0,'#2a2138');g.addColorStop(.08,'#211a2e');g.addColorStop(.5,'#161022');g.addColorStop(1,'#0a0812');
+    const g=cg('vilnight',()=>{const q=ctx.createLinearGradient(0,376,0,2000);q.addColorStop(0,'#2a2138');q.addColorStop(.08,'#211a2e');q.addColorStop(.5,'#161022');q.addColorStop(1,'#0a0812');return q;});
     ctx.fillStyle=g;ctx.fillRect(-800,376,W2,3400);
     ctx.fillStyle='#191428';for(let x=-800;x<W2-800;x+=64){ctx.fillRect(x,376,5,44);ctx.fillRect(x,382,64,4);ctx.fillRect(x,396,64,4);}
     ctx.fillStyle='#141021';for(let i=0;i<Math.ceil(W2/300);i++){const x=-760+i*300;
@@ -1421,8 +1426,8 @@ villagenight:{label:'🌙 Village (night)',
 tavern:{label:'🍺 Tavern',
   sky(){skyGrad('#1c120c','#241812','#2c1d10');
     ctx.save();for(let i=0;i<4;i++){const lx=180+i*280,ly=120+(i%2)*26,fl=.85+.15*Math.sin(now()/120+i*3);
-      const g=ctx.createRadialGradient(lx,ly,4,lx,ly,150);g.addColorStop(0,'rgba(255,190,90,'+(.34*fl)+')');g.addColorStop(1,'rgba(255,150,50,0)');
-      ctx.fillStyle=g;ctx.beginPath();ctx.arc(lx,ly,150,0,7);ctx.fill();
+      const g=cg('lant'+i,()=>{const q=ctx.createRadialGradient(lx,ly,4,lx,ly,150);q.addColorStop(0,'rgba(255,190,90,.34)');q.addColorStop(1,'rgba(255,150,50,0)');return q;});
+      ctx.save();ctx.globalAlpha=fl;ctx.fillStyle=g;ctx.beginPath();ctx.arc(lx,ly,150,0,7);ctx.fill();ctx.restore();
       ctx.fillStyle='#3a2812';ctx.fillRect(lx-1.5,0,3,ly-16);
       ctx.fillStyle='#503418';ctx.fillRect(lx-7,ly-16,14,20);ctx.fillStyle='rgba(255,214,120,'+fl+')';ctx.fillRect(lx-4,ly-11,8,11);}
     ctx.globalAlpha=.12;ctx.strokeStyle='#000';ctx.lineWidth=2;
@@ -1465,12 +1470,14 @@ beach:{label:'🏖 Beach',
       ctx.fillStyle='#7a5a34';ctx.fillRect(x-6,296+bob,30,4);ctx.fillStyle='rgba(255,255,255,.85)';}
     ctx.fillStyle='#3f7d52';ctx.beginPath();ctx.ellipse(1400,300,120,26,0,3.14,0,true);ctx.fill();},
   mid(src){const W2=Math.max(4200,worldW(src)+1600),t=now()/1000;
-    const g=ctx.createLinearGradient(0,348,0,2200);g.addColorStop(0,'#2f7d9a');g.addColorStop(.07,'#48a0b8');g.addColorStop(.45,'#1f5e78');g.addColorStop(1,'#0e3346');
+    const g=cg('beachsea',()=>{const q=ctx.createLinearGradient(0,348,0,2200);q.addColorStop(0,'#2f7d9a');q.addColorStop(.07,'#48a0b8');q.addColorStop(.45,'#1f5e78');q.addColorStop(1,'#0e3346');return q;});
     ctx.fillStyle=g;ctx.fillRect(-800,348,W2,3400);
+    const vs=visSpan(.55),wx0=Math.max(-800,Math.floor(vs[0]/22)*22),wx1=Math.min(W2-800,vs[1]);
     ctx.save();for(let r=0;r<3;r++){ctx.globalAlpha=.5-r*.13;ctx.strokeStyle='#e8f6f8';ctx.lineWidth=2.5;
-      ctx.beginPath();for(let x=-800;x<W2-800;x+=22){const y=362+r*30+Math.sin(x/48-t*(1.6+r*.5))*4;x===-800?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();}
+      ctx.beginPath();for(let x=wx0;x<wx1;x+=22){const y=362+r*30+Math.sin(x/48-t*(1.6+r*.5))*4;x===wx0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();}
     ctx.globalAlpha=.5;ctx.fillStyle='#fff';
     for(let i=0;i<Math.ceil(W2/120);i++){const x=-800+i*120+((i*53)%60),y=355+((i*41)%80);
+      if(x<vs[0]||x>vs[1])continue;
       if(Math.sin(t*2.6+i*2.4)>.5){ctx.fillRect(x,y,4,1.6);ctx.fillRect(x+1.2,y-1.2,1.6,4);}}ctx.restore();},
   tile(x,y,N,E,So,Wt,h){
     ctx.fillStyle=['#d9c18b','#ddc691','#d5bc85','#e1cb97'][h&3];ctx.fillRect(x,y,TILE,TILE);
@@ -1500,7 +1507,7 @@ jungle:{label:'🌴 Jungle',
     for(let i=0;i<Math.ceil(W2/340);i++){const x=-720+i*340;
       ctx.fillRect(x,90+((i*29)%40),9,240);ctx.fillRect(x-14,120+((i*41)%30),5,60);}},
   mid(src){const W2=Math.max(4200,worldW(src)+1600),t=now()/1000;
-    const g=ctx.createLinearGradient(0,430,0,2000);g.addColorStop(0,'rgba(14,38,20,0)');g.addColorStop(.12,'rgba(14,38,20,.85)');g.addColorStop(1,'rgba(5,14,8,.95)');
+    const g=cg('junglefloor',()=>{const q=ctx.createLinearGradient(0,430,0,2000);q.addColorStop(0,'rgba(14,38,20,0)');q.addColorStop(.12,'rgba(14,38,20,.85)');q.addColorStop(1,'rgba(5,14,8,.95)');return q;});
     ctx.fillStyle=g;ctx.fillRect(-800,430,W2,3400);
     ctx.fillStyle='rgba(14,38,20,.8)';
     for(let i=0;i<Math.ceil(W2/170);i++){const x=-800+i*170,sw=Math.sin(t*.7+i*1.9)*4,yy=430+((i*67)%80);
@@ -1609,10 +1616,10 @@ function drawParticle(q){const f=clamp(q.life/(q.life0||q.life||1),0,1);
   else if(q.kind==='glint'){ctx.globalAlpha=f;ctx.fillStyle=q.c||'#ffe9a0';ctx.save();ctx.translate(q.x,q.y);ctx.rotate(q.rot||0);ctx.fillRect(-4,-.75,8,1.5);ctx.fillRect(-.75,-4,1.5,8);ctx.restore();}
   else {ctx.globalAlpha=clamp(q.life*2,0,1);ctx.fillStyle=q.c;ctx.beginPath();ctx.arc(q.x,q.y,q.r,0,7);ctx.fill();}
   ctx.globalAlpha=1;}
-function drawVignette(){const g=ctx.createRadialGradient(VW/2,VH/2,VH*.35,VW/2,VH/2,VH*.8);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.4)');
+function drawVignette(){const g=cg('vig',()=>{const q=ctx.createRadialGradient(VW/2,VH/2,VH*.35,VW/2,VH/2,VH*.8);q.addColorStop(0,'rgba(0,0,0,0)');q.addColorStop(1,'rgba(0,0,0,.4)');return q;});
   ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH);
   if(!EDIT&&SIM.hurtT>0){ctx.save();ctx.globalAlpha=Math.min(.55,SIM.hurtT*1.7);           // red pulse when the ACTIVE pirate takes a hit
-    const rg=ctx.createRadialGradient(VW/2,VH/2,VH*.3,VW/2,VH/2,VH*.72);rg.addColorStop(0,'rgba(200,40,30,0)');rg.addColorStop(1,'rgba(200,40,30,.85)');
+    const rg=cg('hurt',()=>{const q=ctx.createRadialGradient(VW/2,VH/2,VH*.3,VW/2,VH/2,VH*.72);q.addColorStop(0,'rgba(200,40,30,0)');q.addColorStop(1,'rgba(200,40,30,.85)');return q;});
     ctx.fillStyle=rg;ctx.fillRect(0,0,VW,VH);ctx.restore();}}
 
 // pirates
@@ -1826,7 +1833,7 @@ function buildDrawer(){const inner=document.getElementById('drawerInner');inner.
   actBtn.addEventListener('pointermove',e=>{if(e.pointerId!==aId||swiped)return;
     if(e.clientX-aX<-46){swiped=true;keys['e']=false;actBtn.classList.remove('hold');openDrawer();}});
   const aend=e=>{if(e.pointerId!==aId)return;aId=null;keys['e']=false;actBtn.classList.remove('hold');
-    if(!swiped&&performance.now()-aT<HOLD_THRESH*1000)just['e']=true;};   // quick tap → fire the directional action
+    if(!swiped&&performance.now()-aT<250)just['e']=true;};   // forgiving tap window — real thumbs take ~150-250ms
   actBtn.addEventListener('pointerup',aend);actBtn.addEventListener('pointercancel',aend);
   setInterval(()=>{actBtn.classList.toggle('hold',!!(aId&&!swiped&&performance.now()-aT>=HOLD_THRESH*1000));},60);
   // dedicated JUMP button — instant on press, hold for height
