@@ -148,7 +148,7 @@
     font-size:clamp(13px,2vmin,17px);box-shadow:0 8px 24px rgba(216,168,54,.3);transition:transform .08s;}
   .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,.25);color:#e8e2d4;box-shadow:none;}
   .btn:active{transform:scale(.97);}
-  .hide{opacity:0;pointer-events:none;}
+  .hide{opacity:0;pointer-events:none;visibility:hidden;}   /* visibility beats children's pointer-events:auto — hidden menus must never eat gameplay taps */
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}
 </style>
 </head>
@@ -1005,6 +1005,7 @@ function updateSim(dt){
     ap._rootAtk=atk||!!revM;   // rooted from the moment Attack is pressed (no pre-aim drift) — and while reviving
     if(atk){ ap._atkT=(ap._atkT||0)+dt; ap.vx=approach(ap.vx,0,ap.c.decel*dt); if(ap._atkT>=HOLD_THRESH){ ap.aiming=true; aimFromStick(ap,dirX,upH,downH); ap.vx=0; ap.actType='aim'; } }
     else { if(ap._atk){ if((ap._atkT||0)>=HOLD_THRESH){ ap.id==='B'?fireAimed(ap):throwGrapple(ap); } else { ap.id==='B'?blackTap(ap):redTap(ap); } }
+      else if((jk('e')||jk('j'))&&ap.stun<=0&&!ap.downed&&!ap.grappling&&!ap.climbing&&!revM&&!ap._swallowAtk){ ap.id==='B'?blackTap(ap):redTap(ap); }   // whole tap landed between sim steps (slow frame) — the edge still counts
       ap.aiming=false; if(ap.actType==='aim')ap.actType=null; ap._atkT=0; }
     ap._atk=atk;
   }
