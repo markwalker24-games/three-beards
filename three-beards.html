@@ -471,7 +471,7 @@ T.cannon={surface:true,label:'Cannon (push + fire)',chip:'#3a3a40',targets:['bar
     p.act=.25;p.actType='shoot'; shoot(p); return true; }};
 
 T.barricade={surface:true,label:'Barricade',chip:'#6b4a2c',
-  dims:m=>({w:24,h:m.h||100}),fields:[num('height','h',5,20,260)],
+  dims:m=>({w:24,h:m.h||100}),fields:[num('height','h',5,20,2000)],
   solidRect:m=>{if(m.alive===false)return null;const b=bounds(m);return {x:b.x,y:b.y,w:b.w,h:b.h};},
   draw:m=>{ if(m.alive===false){const b=bounds(m);ctx.fillStyle='#5b3f27';
       ctx.fillRect(b.x-2,b.y+b.h-12,12,12);ctx.fillRect(b.x+14,b.y+b.h-10,9,10);return;}
@@ -506,7 +506,7 @@ T.capstan={surface:true,label:'Capstan (hold)',chip:'#b07a3a',targets:['gate','b
     ctx.fillStyle='#6b4a2c';ctx.beginPath();ctx.arc(0,0,5,0,7);ctx.fill();ctx.restore();}};
 
 T.gate={surface:true,label:'Gate (portcullis)',chip:'#6a5236',
-  dims:m=>({w:18,h:m.h||118}),fields:[num('height','h',6,30,260)],
+  dims:m=>({w:18,h:m.h||118}),fields:[num('height','h',6,30,2000)],
   update:(m,dt)=>{ const open=controllersHold(m.id); m.open=open;
     const tgt=open?(m.h||118):0; m.oy=approach(m.oy||0, tgt, (m.h||118)*4*dt);
     if(SIM.pirates&&Math.abs((m.oy||0)-tgt)>2&&Math.random()<dt*15){const b=bounds(m);puff(b.x+b.w/2+rnd(-9,9),b.y+b.h,1,'#a89a84');}},
@@ -1503,7 +1503,7 @@ function drawEditOverlay(){
   const all=[...LV.terrain,...LV.mechanisms];
   for(const m of all){const b=bounds(m);
     if(m===selected){ctx.strokeStyle='#e3b23c';ctx.lineWidth=2;ctx.strokeRect(b.x-2,b.y-2,b.w+4,b.h+4);
-      if(resizable(m)){const hs=14,hx=b.x+b.w,hy=b.y+b.h;   // resize handle, centred on the corner
+      if(resizable(m)){const hs=14,hp=handlePos(m),hx=hp.x,hy=hp.y;   // resize handle, centred on the working corner
         ctx.fillStyle='#e3b23c';ctx.fillRect(hx-hs/2,hy-hs/2,hs,hs);
         ctx.strokeStyle='#1a1206';ctx.lineWidth=2;ctx.strokeRect(hx-hs/2,hy-hs/2,hs,hs);}}
     else{ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1;ctx.strokeRect(b.x,b.y,b.w,b.h);}}
@@ -1797,8 +1797,9 @@ function hitTest(wx,wy){ // spawns first, then mechanisms (reverse), then terrai
   return null;}
 function pad(b){return {x:b.x-9,y:b.y-9,w:b.w+18,h:b.h+18};}
 function resizable(o){return o&&!isSpawn(o)&&o.type!=='rope'&&(o.w!==undefined||o.h!==undefined);}
-function onResizeHandle(o,wx,wy){if(!resizable(o))return false;const b=bounds(o);const t=18/Math.max(.3,cv.getBoundingClientRect().width/VW);
-  return wx>=b.x+b.w-t&&wx<=b.x+b.w+t&&wy>=b.y+b.h-t&&wy<=b.y+b.h+t;}
+function handlePos(o){const b=bounds(o);return {x:b.x+b.w, y:(o.type==='gate'||o.type==='barricade')?b.y:b.y+b.h};}   // walls grow UP from their base → handle on the top edge
+function onResizeHandle(o,wx,wy){if(!resizable(o))return false;const h=handlePos(o);const t=18/Math.max(.3,cv.getBoundingClientRect().width/VW);
+  return wx>=h.x-t&&wx<=h.x+t&&wy>=h.y-t&&wy<=h.y+t;}
 // ---- undo ----
 let undoStack=[];
 function pushUndo(){const s=JSON.stringify(stripRuntime(LV));if(undoStack[undoStack.length-1]===s)return;undoStack.push(s);if(undoStack.length>80)undoStack.shift();}
@@ -1839,7 +1840,8 @@ addEventListener('pointermove',ev=>{ if(!EDIT)return; edMouse=screenToWorld(ev);
     if(!drag.it||performance.now()-drag.it>150){buildInspector();drag.it=performance.now();} }   // throttled — a full DOM rebuild per mousemove made drags stutter
   else if(drag.mode==='resize'){ const b=bounds(o);
     if(o.type==='ground'||o.type==='deck'){o.w=Math.max(20,snap(p.x-o.x));o.h=Math.max(20,snap(p.y-o.y));}
-    else if(o.h!==undefined){o.h=Math.max(20,snap((surfaceTopUnder(o.x+dims(o).w/2))-p.y)); if(o.type==='gate'||o.type==='barricade')o.h=Math.max(20,snap(p.y-b.y));}
+    else if(o.h!==undefined){ const base=(o.y!==undefined)?o.y:surfaceTopUnder(o.x+dims(o).w/2);
+      o.h=Math.max(20,snap(base-p.y)); }   // top edge follows the cursor — the old formula fed h back into itself and ran away
     else if(o.w!==undefined){o.w=Math.max(16,snap(p.x-b.x));}
     if(!drag.it||performance.now()-drag.it>150){buildInspector();drag.it=performance.now();} }
 });
