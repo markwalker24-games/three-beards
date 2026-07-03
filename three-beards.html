@@ -80,6 +80,13 @@
   .beardBtn .bdot{width:clamp(28px,6vmin,46px);height:clamp(28px,6vmin,46px);border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 2px rgba(0,0,0,.35);}
   .beardBtn .bnm{font-size:clamp(15px,3vmin,22px);font-weight:600;}
   .beardBtn .brole{font-size:clamp(11px,1.9vmin,14px);opacity:.6;}
+  .chapBtn{pointer-events:auto;cursor:pointer;display:flex;align-items:center;gap:7px;font:inherit;color:#e8e2d4;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:7px 12px;
+    font-size:clamp(11px,1.7vmin,14px);}
+  .chapBtn b{color:var(--gold);}
+  .chapBtn.done{border-color:rgba(127,200,173,.55);}
+  .chapBtn.locked{opacity:.38;cursor:default;}
+  .chapBtn:not(.locked):hover{border-color:var(--gold);}
   kbd{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.16);border-bottom-width:2px;
     border-radius:5px;padding:0 5px;font-size:.92em;font-family:inherit;}
 
@@ -208,13 +215,14 @@
     <h1>Three Beards</h1>
     <div class="crew" id="startCrew" style="display:flex;gap:clamp(10px,2.4vw,26px);margin:14px 0 20px;flex-wrap:wrap;justify-content:center;"></div>
     <p>Three pirates, one at a time. Swap between them, leave them stationed in the world, and combine their abilities to crack the level open.</p>
+    <div class="crew" id="chapSel" style="display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap;justify-content:center;"></div>
     <div class="btns"><button class="btn" id="playBtn">Set sail ▸</button><button class="btn ghost" id="editBtn">Open level editor</button></div>
     <p style="opacity:.45;font-size:.8em" id="startSub">Chapter 1 · The Gun Deck</p>
   </div>
   <div class="ovl hide" id="win">
     <div class="tag">treasure recovered</div><h1>X marks it.</h1>
     <p id="winStats"></p>
-    <div class="btns"><button class="btn" id="againBtn">Sail again ▸</button><button class="btn ghost" id="winEditBtn">Edit this level</button></div>
+    <div class="btns"><button class="btn" id="nextBtn" style="display:none">Next chapter ▸</button><button class="btn ghost" id="againBtn">Sail again ▸</button><button class="btn ghost" id="winEditBtn">Edit this level</button></div>
   </div>
 
   <p class="sr">Three Beards: a side-on pirate puzzle-platformer with a built-in visual level editor.</p>
@@ -398,7 +406,64 @@ const SMUGGLERS_COVE=(function(){ const s={};
     ],
     intent:'Up two bluffs (deckhand, bracer, gull), then a one-way 256px drop into the cove: a gunner rakes the landing — use the carried barrel as cover or snipe him — then weigh the plate (pirate or the barrel) to open the gate to the treasure.'};
 })();
-const BUILTINS={'village':THE_VILLAGE,'gundeck':THE_GUNDECK,'rigging':THE_RIGGING,'cliffs':JUNGLE_CLIFFS,'cove':SMUGGLERS_COVE,'ropes':TEST_ROPES,'gates':TEST_GATES,'powder':TEST_POWDER,'blockout':STARTER};
+const THE_PORT=(function(){ const s={};
+  rectCells(s,0,16,78,19);        // the quay and dock yard
+  rectCells(s,20,14,23,15);       // loading dock (+64 — everyone; the keg waits up here)
+  rectCells(s,47,14,50,15);       // crate stack 1 (+64)
+  rectCells(s,51,12,54,13);       // crate stack 2 (+128)
+  rectCells(s,55,10,58,11);       // crate stack 3 (+192) — clear of the arm overhead: the leap is a diagonal, no head-bonk
+  rectCells(s,63,8,64,19);        // crane tower (256px — nobody jumps it; go OVER the arm)
+  rectCells(s,60,6,66,7);         // crane arm across the tower top (Redbeard-only +128 from crate 3)
+  for(let c=79;c<=84;c++)for(let r=16;r<=19;r++)delete s[c+','+r];   // the bay — 6 tiles of open water (Redbeard-only leap)
+  rectCells(s,78,20,85,23);       // bay bed (fall in, climb the ship's rope out)
+  rectCells(s,85,16,100,22);      // the ship's hull
+  for(let c=90;c<=91;c++)for(let r=16;r<=21;r++)delete s[c+','+r];   // hatch shaft
+  for(let c=88;c<=96;c++)for(let r=17;r<=21;r++)delete s[c+','+r];   // cargo hold
+  return { id:'zone_port', name:'Chapter 2 — The Port', theme:'ship', tileSize:TILE, world:{w:102*TILE},
+    solid:s, terrain:[],
+    spawns:{B:{x:2*TILE,y:16*TILE},R:{x:3*TILE,y:16*TILE},O:{x:4*TILE,y:16*TILE}},
+    mechanisms:[
+      {id:'s1',type:'sign',x:4*TILE,text:'The Port. The cargo ship is casting off — get aboard!'},
+      {id:'dh1',type:'deckhand',x:10*TILE,min:7*TILE,max:14*TILE},
+      {id:'cut1',type:'cutpurse',x:16*TILE,min:14*TILE,max:19*TILE},
+      {id:'s2',type:'sign',x:18*TILE,text:'Bigbeard: lift the keg off the loading dock. Blackbeard sparks it at the wall'},
+      {id:'keg1',type:'powderkeg',x:21*TILE,y:14*TILE,targetId:'barr1'},
+      {id:'barr1',type:'barricade',x:25*TILE,h:256},
+      {id:'bar1',type:'barrel',x:28*TILE},
+      {id:'brc1',type:'bracer',x:33*TILE,min:29*TILE,max:36*TILE},
+      {id:'p1',type:'plate',x:38*TILE,w:64,targetId:'g1'},
+      {id:'gun1',type:'gunner',x:42*TILE,dir:-1,rate:.85},
+      {id:'g1',type:'gate',x:44*TILE,h:256},
+      {id:'s3',type:'sign',x:47*TILE,text:'Up the crates! Redbeard takes the crane arm — and drops a rope for the crew'},
+      {id:'gull1',type:'gullrider',x:55*TILE,y:5*TILE},
+      {id:'r1',type:'rope',x:62*TILE+2,topY:6*TILE,botY:16*TILE},
+      {id:'s4',type:'sign',x:75*TILE,text:'Only a SPRINTING Redbeard clears the bay (double-tap →). Fall in? He lowers a line from the rail'},
+      {id:'r2',type:'rope',x:84*TILE+20,topY:16*TILE,botY:20*TILE},
+      {id:'bar2',type:'barrel',x:87*TILE},
+      {id:'pow1',type:'powderbarrel',x:88*TILE,min:86*TILE,max:95*TILE},
+      {id:'s5',type:'sign',x:93*TILE,text:'Hold the capstan to open the cargo hatch — the loot is below decks'},
+      {id:'cap1',type:'capstan',x:94*TILE,targetId:'trap1'},
+      {id:'trap1',type:'trapdoor',x:90*TILE,y:16*TILE,w:64},
+      {id:'gun2',type:'gunner',x:99*TILE,dir:-1,rate:.9},
+      {id:'tr1',type:'treasure',x:91*TILE,y:22*TILE},
+    ],
+    intent:'Quay combat → Bigbeard carries the keg down to the wall, Blackbeard sparks it → barrel-cover past the gunner to weigh plate p1 (gate g1) → crate stacks up to the crane: Redbeard alone reaches the arm (+128), lowers rope r1, everyone crosses the tower → Redbeard leaps the 6-tile bay, lowers rope r2 from the rail; the crew drops into the bay bed and climbs aboard → clear the deck (powder barrel + gunner, barrel cover ready) → park a pirate on the capstan, drop through the hatch to the hold treasure.'};
+})();
+const BUILTINS={'village':THE_VILLAGE,'port':THE_PORT,'gundeck':THE_GUNDECK,'rigging':THE_RIGGING,'cliffs':JUNGLE_CLIFFS,'cove':SMUGGLERS_COVE,'ropes':TEST_ROPES,'gates':TEST_GATES,'powder':TEST_POWDER,'blockout':STARTER};
+// ---- the campaign: chapters play in order; finishing one unlocks the next ----
+const CAMPAIGN=[
+  {key:'village', title:'The Village'},
+  {key:'port',    title:'The Port'},
+  {key:'gundeck', title:'The Gun Deck'},
+  {key:'rigging', title:'The Rigging'},
+  {key:'cove',    title:"Smuggler's Cove"},
+  {key:'cliffs',  title:'Jungle Cliffs'},
+];
+let CAMP_IDX=null;                                   // which campaign chapter is being played (null = editor/shared level)
+function loadProg(){try{return JSON.parse(localStorage.getItem('threeBeardsProg'))||{done:{}};}catch(e){return {done:{}};}}
+function saveProg(pr){try{localStorage.setItem('threeBeardsProg',JSON.stringify(pr));}catch(e){}}
+function chapterUnlocked(i){const pr=loadProg(); for(let k=0;k<i;k++)if(!pr.done[CAMPAIGN[k].key])return false; return true;}
+function continueIdx(){const pr=loadProg(); for(let i=0;i<CAMPAIGN.length;i++)if(!pr.done[CAMPAIGN[i].key])return i; return CAMPAIGN.length-1;}
 
 // ===================================================================== mechanism registry
 // each type: dims(m)->{w,h}; surface(bool); fields[]; targets(type|null);
@@ -771,10 +836,9 @@ function ensureBackdrop(L){const bd=L&&L.backdrop;
   else{bdImg=null;bdSrc=null;}}
 let now=()=>perfNow();           // patched below
 
-function colFloorTop(S,cx){ if(!S)return null; const rows=[];                 // per-column floor (same rule TOPMAP uses)
-  for(const k in S){const i=k.indexOf(','); if(+k.slice(0,i)===cx)rows.push(+k.slice(i+1));}
-  if(!rows.length)return null; rows.sort((a,b)=>a-b); let fl=rows[0];
-  for(let k=1;k<rows.length;k++){if(rows[k]>rows[k-1]+1){fl=rows[k];break;}} return fl*TILE; }
+function colFloorTop(S,cx){ if(!S)return null; let top=null;                   // TOPMOST floor of the column — a deck over a hold pins to the deck
+  for(const k in S){const i=k.indexOf(','); if(+k.slice(0,i)===cx){const r=+k.slice(i+1); if(top===null||r<top)top=r;}}
+  return top===null?null:top*TILE; }
 function normalize(L){
   if(!L.theme)L.theme='ship';
   if(!L.world||!L.world.w)L.world={w:2000};                      // survive hand-edited / partial imports
@@ -793,8 +857,8 @@ function LVorSIM(){return SIM.pirates?SIM:LV;}
 function controllersHold(gateId){ const src=LVorSIM().mechanisms;
   return src.some(m=>(m.type==='plate'||m.type==='capstan')&&m.targetId===gateId&&m.held); }
 
-function loadSim(){
-  const L=clone(LV); normalize(L);
+function loadSim(src){
+  const L=clone(src||LV); normalize(L);
   SIM={
     L, mechanisms:L.mechanisms, terrain:L.terrain, active:'B',
     pirates:{}, proj:[], particles:[], cam:{x:0,y:0}, camT:{x:0,y:0}, camLookX:0, camLookY:0, shake:0,
@@ -1927,7 +1991,7 @@ function enterEdit(){EDIT=true;SIM={pirates:null};document.getElementById('stage
   document.getElementById('themeSel').value=(LV.theme&&THEMES[LV.theme])?LV.theme:'ship';
   buildPalette();buildInspector();updateZoomLabel();}
 function updateZoomLabel(){const el=document.getElementById('zoomLvl');if(el)el.textContent=Math.round(edZoom*100)+'%';}
-function enterPlay(){EDIT=false;document.getElementById('stage').dataset.mode='play';
+function enterPlay(){EDIT=false;CAMP_IDX=null;document.getElementById('stage').dataset.mode='play';
   document.getElementById('modeBtn').textContent='✎ Edit level';loadSim();}
 document.getElementById('modeBtn').onclick=()=>{ if(EDIT)enterPlay(); else { if(!startHidden()){hide(startEl);} enterEdit(); } };
 document.getElementById('playTest').onclick=enterPlay;
@@ -2004,12 +2068,30 @@ function goFullscreen(){ try{
 const startEl=document.getElementById('start'),winEl=document.getElementById('win');
 const startHidden=()=>startEl.classList.contains('hide');
 function hide(el){el.classList.add('hide');}function show(el){el.classList.remove('hide');}
-document.getElementById('playBtn').onclick=()=>{audioInit();goFullscreen();hide(startEl);loadSim();};
+function playCampaign(i){CAMP_IDX=i;const L=BUILTINS[CAMPAIGN[i].key];
+  document.getElementById('startSub').textContent=L.name||CAMPAIGN[i].title;
+  hide(startEl);hide(winEl);loadSim(L);}
+function buildChapterSelect(){const host=document.getElementById('chapSel');if(!host)return;host.innerHTML='';
+  const pr=loadProg();
+  CAMPAIGN.forEach((c,i)=>{const un=chapterUnlocked(i),done=!!pr.done[c.key];
+    const b=document.createElement('button');b.className='chapBtn'+(un?'':' locked')+(done?' done':'');
+    b.innerHTML='<b>'+(i+1)+'</b><span>'+c.title+'</span>'+(done?' ✓':(un?'':' 🔒'));
+    if(un)b.onclick=()=>{audioInit();goFullscreen();playCampaign(i);};
+    host.appendChild(b);});}
+document.getElementById('playBtn').onclick=()=>{audioInit();goFullscreen();
+  if(/^#lvl=/.test(location.hash)){hide(startEl);CAMP_IDX=null;loadSim();return;}   // a shared level plays as itself
+  playCampaign(continueIdx());};
 document.getElementById('editBtn').onclick=()=>{audioInit();goFullscreen();enterEdit();};
-document.getElementById('againBtn').onclick=()=>{goFullscreen();loadSim();hide(winEl);};
+document.getElementById('againBtn').onclick=()=>{goFullscreen();hide(winEl);
+  if(CAMP_IDX!=null)playCampaign(CAMP_IDX);else loadSim();};
+document.getElementById('nextBtn').onclick=()=>{goFullscreen();buildChapterSelect();playCampaign(CAMP_IDX+1);};
 document.getElementById('winEditBtn').onclick=()=>{enterEdit();};
 function onWin(){sfx('win');SIM.shake=6;const ap=SIM.pirates[SIM.active];
   fxRing(ap.x+ap.w/2,ap.y+ap.h/2,'#ffd766',130);fxGlints(ap.x+ap.w/2,ap.y,16);
+  if(CAMP_IDX!=null){const pr=loadProg();pr.done[CAMPAIGN[CAMP_IDX].key]=true;saveProg(pr);buildChapterSelect();}
+  const nb=document.getElementById('nextBtn');
+  nb.style.display=(CAMP_IDX!=null&&CAMP_IDX+1<CAMPAIGN.length)?'':'none';
+  nb.textContent=(CAMP_IDX!=null&&CAMP_IDX+1<CAMPAIGN.length)?('Next: '+CAMPAIGN[CAMP_IDX+1].title+' ▸'):'';
   for(let i=0;i<40;i++)SIM.particles.push({x:ap.x+ap.w/2,y:ap.y+ap.h/2,vx:rnd(-200,200),vy:rnd(-360,-60),life:rnd(.8,1.6),c:i%2?'#ffd766':'#fff3c4',r:rnd(2,4)});
   const secs=((perfNow()-SIM.t0)/1000).toFixed(1);
   document.getElementById('winStats').textContent=`Cleared in ${secs}s with ${SIM.swaps} swaps.`;
@@ -2023,8 +2105,11 @@ function perfNow(){return performance.now();}
 now=perfNow;
 
 // ===================================================================== boot + loop
-restore(); loadFromHash(); normalize(LV); buildTabs(); buildPalette(); loadSim();
-document.getElementById('startSub').textContent=LV.name||'';
+restore(); const SHARED=loadFromHash(); normalize(LV); buildTabs(); buildPalette();
+buildChapterSelect();
+if(SHARED){loadSim();document.getElementById('startSub').textContent=LV.name||'';}
+else{CAMP_IDX=continueIdx();loadSim(BUILTINS[CAMPAIGN[CAMP_IDX].key]);
+  document.getElementById('startSub').textContent='Continue: '+CAMPAIGN[CAMP_IDX].title;}
 (function startPortraits(){const host=document.getElementById('startCrew');
   const info={B:'Slash · Shoot · spark the charge',R:'Run · Jump · grapple anywhere',O:'Roll · Push · carry barrel cover'};
   for(const id of ORDER){const c=CREW[id];const el=document.createElement('div');el.style.cssText='display:flex;flex-direction:column;align-items:center;gap:6px;width:clamp(74px,15vw,120px)';
